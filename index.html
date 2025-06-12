@@ -87,6 +87,7 @@
     <!-- Boutons -->
     <button onclick="spin()">🎲 Lancer la roue</button>
     <button onclick="resetWheel()">🔄 Réinitialiser</button>
+    <button onclick="clearWheel()">🧹 RAZ</button>
 
     <div id="resultat"></div>
 
@@ -249,6 +250,9 @@
       }
 
       function ajouterNom() {
+        if (nomsActifs.length === 1 && nomsActifs[0] === "") {
+          nomsActifs = [];
+        }
         const input = document.getElementById("nouveauNom");
         const nomsAjoutes = input.value
           .split(",")
@@ -303,7 +307,16 @@
       }
 
       function resetWheel() {
-        nomsActifs = [...nomsInitiaux];
+        nomsActifs = [...nomsActifs].concat(historique);
+        historique = [];
+        document.getElementById("resultat").textContent = "";
+        dessinerRoue();
+        afficherHistorique();
+        sauvegarder();
+      }
+
+      function clearWheel() {
+        nomsActifs = [""];
         historique = [];
         document.getElementById("resultat").textContent = "";
         dessinerRoue();
