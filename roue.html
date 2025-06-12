@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Roue des noms</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        text-align: center;
+        margin-top: 30px;
+      }
+      .container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      canvas {
+        border: 5px solid #444;
+        border-radius: 50%;
+      }
+      .arrow {
+        width: 0;
+        height: 0;
+        border-top: 20px solid transparent;
+        border-bottom: 20px solid transparent;
+        border-right: 30px solid black;
+        margin-left: 10px;
+      }
+      button {
+        padding: 6px 12px;
+        font-size: 16px;
+        margin-left: 5px;
+        cursor: pointer;
+      }
+      input {
+        padding: 6px;
+        font-size: 16px;
+        width: 300px;
+      }
+      #resultat {
+        margin-top: 20px;
+        font-size: 24px;
+        font-weight: bold;
+      }
+      #historique,
+      #noms-actifs {
+        margin-top: 30px;
+        font-size: 18px;
+      }
+      ul {
+        list-style: none;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🎯 Roue des noms</h1>
+
+    <!-- Ajout de noms -->
+    <div>
+      <input
+        id="nouveauNom"
+        type="text"
+        placeholder="Ajouter des noms (séparés par des virgules)"
+      />
+      <button onclick="ajouterNom()">➕ Ajouter</button>
+    </div>
+
+    <!-- Roue + aiguille -->
+    <div class="container" style="margin-top: 20px">
+      <canvas id="wheel" width="500" height="500"></canvas>
+      <div class="arrow"></div>
+    </div>
+
+    <!-- Bouton lancer -->
+    <button onclick="spin()">🎲 Lancer la roue</button>
+    <button onclick="resetWheel()">🔄 Réinitialiser</button>
+
+    <!-- Résultat -->
+    <div id="resultat"></div>
+
+    <!-- Historique -->
+    <div id="historique">
+      <h2>🏆 Historique des gagnants</h2>
+      <ul id="liste-historique"></ul>
+    </div>
+
+    <!-- Liste des noms actifs -->
+    <div id="noms-actifs">
+      <h2>👥 Noms encore dans la roue</h2>
+      <ul id="liste-noms-actifs"></ul>
+    </div>
+
+    <!-- Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <script>
+      const nomsInitiaux = [
+        "Alice",
+        "Bob",
+        "Charlie",
+        "Diane",
+        "Émilie",
+        "Farid",
+        "George",
+        "Hélène",
+      ];
+      let nomsActifs = JSON.parse(localStorage.getItem("nomsActifs")) || [
+        ...nomsInitiaux,
+      ];
+      let historique = JSON.parse(localStorage.getItem("historique")) || [];
+
+      const canvas = document.getElementById("wheel");
+      const ctx = canvas.getContext("2d");
+      const rayon = canvas.width / 2;
+      let angleActuel = 0;
+
+      const audioVictory = new Audio("tada.mp3");
+      const audioEasterEgg = new Audio("boule-noire.mp3");
+
+      function getCouleurs(n) {
+        const palette = [
+          "#FF5733",
+          "#33FF57",
+          "#3357FF",
+          "#F39C12",
+          "#8E44AD",
+          "#1ABC9C",
+          "#E74C3C",
+          "#2ECC71",
+        ];
+        return Array.from({ length: n }, (_, i) => palette[i % palette.length]);
+      }
+
+      function dessinerRoue() {
+        const arc = (2 * Math.PI) / nomsActifs.length;
+        const couleurs = getCouleurs(nomsActifs.length);
+
+        for (let i = 0; i < nomsActifs.length; i++) {
+          const angle = angleActuel + i * arc;
+          ctx.beginPath();
+          ctx.fillStyle = couleurs[i];
+          ctx.moveTo(rayon, rayon);
+          ctx.arc(rayon, rayon, rayon, angle, angle + arc);
+          ctx.lineTo(rayon, rayon);
+          ctx.fill();
+
+          ctx.save();
+          ctx.fillStyle = "white";
+          ctx.translate(rayon, rayon);
+          ctx.rotate(angle + arc / 2);
+          ctx.textAlign = "right";
+          ctx.font = "bold 16px sans-serif";
+          ctx.fillText(nomsActifs[i], rayon - 10, 10);
+          ctx.restore();
+        }
+
+        afficherNomsActifs();
+      }
+
+      function spin() {
+        if (nomsActifs.length === 0) {
+          alert("🎉 Tous les noms ont été tirés !");
+          return;
+        }
+
+        const arc = (2 * Math.PI) / nomsActifs.length;
+        let spins = Math.floor(Math.random() * 3) + 3;
+        let angleFinal = Math.random() * 2 * Math.PI;
+        let angleTotal = spins * 2 * Math.PI + angleFinal;
+        let duree = 3000;
+
+        let start = null;
+        function animate(timestamp) {
+          if (!start) start = timestamp;
+          const progress = timestamp - start;
+          const eased = easeOut(progress / duree);
+          const angle = eased * angleTotal;
+
+          angleActuel = angle % (2 * Math.PI);
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          dessinerRoue();
+
+          if (progress < duree) {
+            requestAnimationFrame(animate);
+          } else {
+            const index =
+              Math.floor((2 * Math.PI - angleActuel) / arc) % nomsActifs.length;
+            const gagnant = nomsActifs[index];
+            document.getElementById(
+              "resultat"
+            ).textContent = `🎉 Gagnant : ${gagnant}`;
+            historique.unshift(gagnant);
+            nomsActifs.splice(index, 1);
+            dessinerRoue();
+            afficherHistorique();
+            sauvegarder();
+
+            // 🎊 Confettis
+            confetti({
+              particleCount: 300,
+              spread: 200,
+              origin: { x: 1, y: 0.5 },
+            });
+
+            // 🔊 Son
+            if (gagnant.toLowerCase() === "vincent le dû") {
+              audioEasterEgg.currentTime = 0;
+              audioEasterEgg
+                .play()
+                .catch(() => console.log("Son bloqué ou non chargé."));
+            } else {
+              audioVictory.currentTime = 0;
+              audioVictory
+                .play()
+                .catch(() => console.log("Son bloqué ou non chargé."));
+            }
+          }
+        }
+
+        requestAnimationFrame(animate);
+      }
+
+      function easeOut(t) {
+        return 1 - Math.pow(1 - t, 3);
+      }
+
+      function ajouterNom() {
+        const input = document.getElementById("nouveauNom");
+        const nomsAjoutes = input.value
+          .split(",")
+          .map((n) => n.trim())
+          .filter((n) => n);
+        let nomsExistantsLC = nomsActifs.map((n) => n.toLowerCase());
+        let ajoutés = [];
+
+        nomsAjoutes.forEach((nom) => {
+          if (!nomsExistantsLC.includes(nom.toLowerCase()) && nom !== "") {
+            nomsActifs.push(nom);
+            ajoutés.push(nom);
+          }
+        });
+
+        if (ajoutés.length === 0) {
+          alert("Aucun nouveau nom ajouté (doublon ou vide).");
+        }
+
+        input.value = "";
+        dessinerRoue();
+        sauvegarder();
+      }
+
+      function afficherHistorique() {
+        const ul = document.getElementById("liste-historique");
+        ul.innerHTML = "";
+
+        historique.slice(0, 10).forEach((nom, index) => {
+          const li = document.createElement("li");
+          li.innerHTML = `🎯 ${nom} <button style="margin-left:10px;color:red;" onclick="remettreNom(${index})">❌</button>`;
+          ul.appendChild(li);
+        });
+      }
+
+      function remettreNom(index) {
+        const nomARemettre = historique.splice(index, 1)[0];
+        if (
+          !nomsActifs
+            .map((n) => n.toLowerCase())
+            .includes(nomARemettre.toLowerCase())
+        ) {
+          nomsActifs.push(nomARemettre);
+        }
+        dessinerRoue();
+        afficherHistorique();
+        sauvegarder();
+      }
+
+      function afficherNomsActifs() {
+        const ul = document.getElementById("liste-noms-actifs");
+        ul.innerHTML = "";
+        nomsActifs
+          .slice()
+          .sort()
+          .forEach((nom) => {
+            const li = document.createElement("li");
+            li.textContent = nom;
+            ul.appendChild(li);
+          });
+      }
+
+      function resetWheel() {
+        nomsActifs = [...nomsInitiaux];
+        historique = [];
+        document.getElementById("resultat").textContent = "";
+        dessinerRoue();
+        afficherHistorique();
+        sauvegarder();
+      }
+
+      function sauvegarder() {
+        localStorage.setItem("nomsActifs", JSON.stringify(nomsActifs));
+        localStorage.setItem("historique", JSON.stringify(historique));
+      }
+
+      // Initialisation
+      dessinerRoue();
+      afficherHistorique();
+    </script>
+  </body>
+</html>
