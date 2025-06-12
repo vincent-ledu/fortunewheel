@@ -2,7 +2,7 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <title>Roue des noms</title>
+    <title>Roue des noms multi-contextes</title>
     <style>
       body {
         font-family: sans-serif;
@@ -56,6 +56,18 @@
   <body>
     <h1>🎯 Roue des noms</h1>
 
+    <!-- Gestion des contextes -->
+    <div style="margin-bottom: 20px">
+      <label for="contexteSelect"><strong>🎛 Contexte :</strong></label>
+      <select id="contexteSelect" onchange="changerContexte()"></select>
+      <input
+        id="nouveauContexte"
+        type="text"
+        placeholder="Nouveau contexte..."
+      />
+      <button onclick="ajouterContexte()">➕ Ajouter</button>
+    </div>
+
     <!-- Ajout de noms -->
     <div>
       <input
@@ -72,11 +84,10 @@
       <div class="arrow"></div>
     </div>
 
-    <!-- Bouton lancer -->
+    <!-- Boutons -->
     <button onclick="spin()">🎲 Lancer la roue</button>
     <button onclick="resetWheel()">🔄 Réinitialiser</button>
 
-    <!-- Résultat -->
     <div id="resultat"></div>
 
     <!-- Historique -->
@@ -85,16 +96,17 @@
       <ul id="liste-historique"></ul>
     </div>
 
-    <!-- Liste des noms actifs -->
+    <!-- Noms actifs -->
     <div id="noms-actifs">
       <h2>👥 Noms encore dans la roue</h2>
       <ul id="liste-noms-actifs"></ul>
     </div>
 
-    <!-- Confetti -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-
     <script>
+      let contextes = JSON.parse(localStorage.getItem("contextes")) || ["noms"];
+      let contexteActuel = localStorage.getItem("contexteActuel") || "noms";
+
       const nomsInitiaux = [
         "Alice",
         "Bob",
@@ -105,29 +117,61 @@
         "George",
         "Hélène",
       ];
-      let nomsActifs = JSON.parse(localStorage.getItem("nomsActifs")) || [
-        ...nomsInitiaux,
-      ];
-      let historique = JSON.parse(localStorage.getItem("historique")) || [];
+      let nomsActifs = [];
+      let historique = [];
 
       const canvas = document.getElementById("wheel");
       const ctx = canvas.getContext("2d");
       const rayon = canvas.width / 2;
       let angleActuel = 0;
-
-      const audioVictory = new Audio("tada.mp3");
+      const audio = new Audio("victory.mp3");
       const audioEasterEgg = new Audio("boule-noire.mp3");
+
+      function initContextes() {
+        const select = document.getElementById("contexteSelect");
+        select.innerHTML = "";
+        contextes.forEach((c) => {
+          const option = document.createElement("option");
+          option.value = c;
+          option.textContent = c;
+          if (c === contexteActuel) option.selected = true;
+          select.appendChild(option);
+        });
+      }
+
+      function ajouterContexte() {
+        const input = document.getElementById("nouveauContexte");
+        const nouveau = input.value.trim();
+        if (nouveau && !contextes.includes(nouveau)) {
+          contextes.push(nouveau);
+          localStorage.setItem("contextes", JSON.stringify(contextes));
+          contexteActuel = nouveau;
+          localStorage.setItem("contexteActuel", contexteActuel);
+          input.value = "";
+          initContextes();
+          chargerDonneesContexte();
+        }
+      }
+
+      function changerContexte() {
+        const select = document.getElementById("contexteSelect");
+        contexteActuel = select.value;
+        localStorage.setItem("contexteActuel", contexteActuel);
+        chargerDonneesContexte();
+      }
 
       function getCouleurs(n) {
         const palette = [
-          "#FF5733",
-          "#33FF57",
-          "#3357FF",
-          "#F39C12",
-          "#8E44AD",
-          "#1ABC9C",
-          "#E74C3C",
-          "#2ECC71",
+          "#2E86AB",
+          "#FF6B6B",
+          "#6BCB77",
+          "#FFD93D",
+          "#A66DD4",
+          "#FF9671",
+          "#70D6FF",
+          "#D72638",
+          "#355C7D",
+          "#1B9AAA",
         ];
         return Array.from({ length: n }, (_, i) => palette[i % palette.length]);
       }
@@ -135,7 +179,6 @@
       function dessinerRoue() {
         const arc = (2 * Math.PI) / nomsActifs.length;
         const couleurs = getCouleurs(nomsActifs.length);
-
         for (let i = 0; i < nomsActifs.length; i++) {
           const angle = angleActuel + i * arc;
           ctx.beginPath();
@@ -154,7 +197,6 @@
           ctx.fillText(nomsActifs[i], rayon - 10, 10);
           ctx.restore();
         }
-
         afficherNomsActifs();
       }
 
@@ -163,24 +205,20 @@
           alert("🎉 Tous les noms ont été tirés !");
           return;
         }
-
         const arc = (2 * Math.PI) / nomsActifs.length;
         let spins = Math.floor(Math.random() * 3) + 3;
         let angleFinal = Math.random() * 2 * Math.PI;
         let angleTotal = spins * 2 * Math.PI + angleFinal;
         let duree = 3000;
-
         let start = null;
         function animate(timestamp) {
           if (!start) start = timestamp;
           const progress = timestamp - start;
           const eased = easeOut(progress / duree);
           const angle = eased * angleTotal;
-
           angleActuel = angle % (2 * Math.PI);
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           dessinerRoue();
-
           if (progress < duree) {
             requestAnimationFrame(animate);
           } else {
@@ -195,29 +233,23 @@
             dessinerRoue();
             afficherHistorique();
             sauvegarder();
-
-            // 🎊 Confettis
             confetti({
-              particleCount: 300,
-              spread: 200,
+              particleCount: 150,
+              spread: 90,
               origin: { x: 1, y: 0.5 },
             });
-
-            // 🔊 Son
             if (gagnant.toLowerCase() === "vincent le dû") {
               audioEasterEgg.currentTime = 0;
-              audioEasterEgg
-                .play()
-                .catch(() => console.log("Son bloqué ou non chargé."));
-            } else {
-              audioVictory.currentTime = 0;
-              audioVictory
-                .play()
-                .catch(() => console.log("Son bloqué ou non chargé."));
+              audioEasterEgg.play().catch(() => {
+                console.log("Erreur audio");
+              });
             }
+            audio.currentTime = 0;
+            audio.play().catch(() => {
+              console.log("Erreur audio");
+            });
           }
         }
-
         requestAnimationFrame(animate);
       }
 
@@ -232,19 +264,11 @@
           .map((n) => n.trim())
           .filter((n) => n);
         let nomsExistantsLC = nomsActifs.map((n) => n.toLowerCase());
-        let ajoutés = [];
-
         nomsAjoutes.forEach((nom) => {
-          if (!nomsExistantsLC.includes(nom.toLowerCase()) && nom !== "") {
+          if (!nomsExistantsLC.includes(nom.toLowerCase())) {
             nomsActifs.push(nom);
-            ajoutés.push(nom);
           }
         });
-
-        if (ajoutés.length === 0) {
-          alert("Aucun nouveau nom ajouté (doublon ou vide).");
-        }
-
         input.value = "";
         dessinerRoue();
         sauvegarder();
@@ -253,7 +277,6 @@
       function afficherHistorique() {
         const ul = document.getElementById("liste-historique");
         ul.innerHTML = "";
-
         historique.slice(0, 10).forEach((nom, index) => {
           const li = document.createElement("li");
           li.innerHTML = `🎯 ${nom} <button style="margin-left:10px;color:red;" onclick="remettreNom(${index})">❌</button>`;
@@ -298,13 +321,29 @@
       }
 
       function sauvegarder() {
-        localStorage.setItem("nomsActifs", JSON.stringify(nomsActifs));
-        localStorage.setItem("historique", JSON.stringify(historique));
+        localStorage.setItem(
+          contexteActuel + "_nomsActifs",
+          JSON.stringify(nomsActifs)
+        );
+        localStorage.setItem(
+          contexteActuel + "_historique",
+          JSON.stringify(historique)
+        );
       }
 
-      // Initialisation
-      dessinerRoue();
-      afficherHistorique();
+      function chargerDonneesContexte() {
+        nomsActifs = JSON.parse(
+          localStorage.getItem(contexteActuel + "_nomsActifs")
+        ) || [...nomsInitiaux];
+        historique =
+          JSON.parse(localStorage.getItem(contexteActuel + "_historique")) ||
+          [];
+        dessinerRoue();
+        afficherHistorique();
+      }
+
+      initContextes();
+      chargerDonneesContexte();
     </script>
   </body>
 </html>
